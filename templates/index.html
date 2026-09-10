@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>티커를 입력하면 지금 어떻게 해야 할지 알려드려요</h1>
+
+  <form class="search" action="/analyze" method="get">
+    <input type="text" name="ticker" placeholder="예: NVDA, AAPL, MSFT" value="{{ ticker or '' }}" autofocus>
+    <button type="submit">분석</button>
+  </form>
+  <div class="hint">
+    야후 파이낸스에 있는 티커면 대부분 됩니다 (미국주식 및 해외 상장 종목, 예: 한국 종목은 005930.KS 형식).<br>
+    관심종목 여러 개를 한 번에 보고 자본 배분까지 계산하려면 <a class="back-link" href="/portfolio">Portfolio Plan →</a>
+  </div>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <div class="scope-note">
+    이 도구는 <strong>TREND SCORE</strong>(종목 추세) · <strong>CHASE RISK</strong>(추격매수 위험) ·
+    <strong>MARKET REGIME</strong>(시장 환경) 세 가지 신호가 서로 일치하는지, 충돌하는지를 보고
+    ACCUMULATE / WAIT / WATCH / AVOID 중 하나로 판단을 정리해주는 프로토타입입니다.<br><br>
+    특정 종목의 매수·매도를 권유하는 투자자문이 아니며, 자본 배분(금액·비중) 계산은 포함하지 않습니다.
+    모든 판단은 공개 시세 데이터를 규칙 기반으로 조합한 결과이며 참고용입니다.
+  </div>
+{% endblock %}

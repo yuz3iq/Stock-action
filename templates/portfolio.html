@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+  <a class="back-link" href="/">&larr; 개별 종목 보기</a>
+
+  <h1 style="margin-top:14px;">Portfolio Plan — 실데이터</h1>
+
+  <form class="search" action="/portfolio" method="get" style="flex-direction: column; align-items: stretch; gap: 10px;">
+    <div>
+      <div class="hint" style="margin-top:0;">관심종목 (쉼표로 구분, 개수 제한 없음 — 야후 파이낸스 티커 기준)</div>
+      <input type="text" name="tickers" value="{{ tickers_raw or '' }}" style="width:100%;">
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap: wrap;">
+      <div style="flex:1; min-width:180px;">
+        <div class="hint" style="margin-top:0;">총 자본금 (₩)</div>
+        <input type="text" name="capital" value="{{ capital or 30000000 }}" style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:180px;">
+        <div class="hint" style="margin-top:0;">위험 성향</div>
+        <select name="risk" style="width:100%; padding:14px 16px; border-radius:10px; border:1px solid var(--panel-border); background:var(--panel); color:var(--text); font-size:15px;">
+          {% for r in ["Conservative", "Moderate", "Aggressive"] %}
+            <option value="{{ r }}" {% if risk_profile == r %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <button type="submit" style="align-self:flex-start;">분석</button>
+  </form>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+
+  {% if errors %}
+    <div class="error">
+      다음 종목은 데이터를 가져오지 못해 제외했습니다: {{ errors|join(", ") }}
+    </div>
+  {% endif %}
+
+  {% if plan %}
+    <div class="cards" style="grid-template-columns: repeat(3, 1fr); margin-top: 20px;">
+      <div class="card">
+        <div class="label">Equity Exposure</div>
+        <div class="badge neutral" style="font-size:20px; padding:6px 12px;">{{ plan.equity_pct }}%</div>
+      </div>
+      <div class="card">
+        <div class="label">Cash</div>
+        <div class="badge neutral" style="font-size:20px; padding:6px 12px;">{{ plan.cash_pct }}%</div>
+      </div>
+      <div class="card">
+        <div class="label">Market Regime</div>
+        <div class="badge {{ plan.regime.label|badge_class }}">{{ plan.regime.label }}</div>
+      </div>
+    </div>
+
+    <table style="width:100%; border-collapse: collapse; margin-top:18px; font-size:14px;">
+      <thead>
+        <tr style="text-align:left; color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">종목</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">가격</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">추세</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">추격위험</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">판단</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">비중</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">금액</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in plan.rows %}
+        <tr>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); font-weight:700;">{{ row.ticker }}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">${{ "%.2f"|format(row.price) }}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);"><span class="badge {{ row.trend.label|badge_class }}" style="margin:0;">{{ row.trend.label }}</span></td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);"><span class="badge {{ row.chase.label|badge_class }}" style="margin:0;">{{ row.chase.label }}</span></td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);"><span class="badge {{ row.action.verdict|badge_class }}" style="margin:0;">{{ row.action.verdict }}</span></td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">{{ row.weight }}%</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">₩{{ "{:,.0f}".format(capital * row.weight / 100) }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td style="padding:10px 8px; font-weight:700;">CASH</td>
+          <td style="padding:10px 8px;">—</td>
+          <td style="padding:10px 8px;">—</td>
+          <td style="padding:10px 8px;">—</td>
+          <td style="padding:10px 8px;"><span class="badge neutral" style="margin:0;">HOLD</span></td>
+          <td style="padding:10px 8px; text-align:right;">{{ plan.cash_pct }}%</td>
+          <td style="padding:10px 8px; text-align:right;">₩{{ "{:,.0f}".format(capital * plan.cash_pct / 100) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  {% endif %}
+
+  <div class="scope-note">
+    비중은 확신도 등급제(STRONG BULLISH+ACCUMULATE → 15%, BULLISH+ACCUMULATE → 8%, 그 외 0%)로 정하고,
+    선택한 위험성향×시장환경으로 정해지는 최대 주식비중을 넘지 않도록 비례 축소합니다. 남는 한도는 현금으로 둡니다.
+    개인 참고용 계산이며 투자자문이 아닙니다. 종목 수 제한은 없지만 종목이 많을수록 야후 파이낸스 호출이
+    늘어나 응답이 느려질 수 있습니다.
+  </div>
+{% endblock %}

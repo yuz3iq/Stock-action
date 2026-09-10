@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+  <a class="back-link" href="/">&larr; 다른 티커 보기</a>
+
+  <div class="ticker-row" style="margin-top: 14px;">
+    <h1 style="margin:0;">{{ ticker }}</h1>
+    <div class="price">${{ "%.2f"|format(last_price) }}</div>
+  </div>
+
+  <div class="action-banner {{ action.verdict|badge_class }}">
+    <div class="verdict">{{ action.verdict }}</div>
+    <div class="reason">{{ action.reason }}</div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Trend Score</div>
+      <div class="badge {{ trend.label|badge_class }}">{{ trend.label }}</div>
+      <div class="detail">{{ trend.explanation }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Chase Risk</div>
+      <div class="badge {{ chase.label|badge_class }}">{{ chase.label }}</div>
+      <div class="detail">{{ chase.explanation }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Market Regime</div>
+      <div class="badge {{ regime.label|badge_class }}">{{ regime.label }}</div>
+      <div class="detail">{{ regime.explanation }}</div>
+    </div>
+  </div>
+
+  <div class="scope-note">
+    ACCUMULATE는 세 신호의 방향이 일치할 때, WAIT/WAIT FOR PULLBACK은 신호가 서로 충돌할 때,
+    AVOID는 종목과 시장이 모두 부정적으로 정렬될 때 나옵니다. 자본 배분 비중(%)이나 목표가는
+    계산하지 않는 MVP 단계이며, 투자 조언이 아닌 참고용 신호입니다.
+  </div>
+{% endblock %}
