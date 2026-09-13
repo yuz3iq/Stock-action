@@ -8,8 +8,18 @@
   </form>
   <div class="hint">
     야후 파이낸스에 있는 티커면 대부분 됩니다 (미국주식 및 해외 상장 종목, 예: 한국 종목은 005930.KS 형식).<br>
-    관심종목 여러 개를 한 번에 보고 자본 배분까지 계산하려면 <a class="back-link" href="/portfolio">Portfolio Plan →</a>
+    관심종목 여러 개를 한 번에 보고 자본 배분까지 계산하려면 <a class="back-link" href="/portfolio">Portfolio Plan →</a><br>
+    실제 내 매매 기록을 시스템 판단과 비교하려면 <a class="back-link" href="/trades">내 매매 vs 시스템 권장 →</a><br>
+    관심종목의 판단이 어제와 달라졌는지 보려면 <a class="back-link" href="/changes">판단 변화 감지 →</a>
   </div>
+
+  {% if today_changes %}
+    <div class="alert-banner">
+      오늘 판단이 바뀐 종목이 {{ today_changes|length }}개 있어요:
+      {% for c in today_changes %}<strong>{{ c.ticker }}</strong>({{ c.from }} → {{ c.to }}){% if not loop.last %}, {% endif %}{% endfor %}
+      <a href="/changes">자세히 보기 →</a>
+    </div>
+  {% endif %}
 
   {% if error %}
     <div class="error">{{ error }}</div>

@@ -240,11 +240,18 @@ def compute_market_regime(macro: dict) -> RegimeResult:
 
     parts = []
     if "vix" in factors:
-        parts.append(f"VIX {factors['vix']['level']}")
+        chg = factors["vix"]["chg_10d"]
+        parts.append(f"VIX {factors['vix']['level']}(10일 {chg:+.1f})")
     if "index_trend" in factors:
         parts.append("지수 상승 정렬" if factors["index_trend"]["vote"] > 0 else
                       "지수 하락 정렬" if factors["index_trend"]["vote"] < 0 else "지수 혼조")
-    explanation = f"{', '.join(parts)} 등을 종합하면 현재 시장 환경은 {label}에 가깝습니다."
+    if "dollar_20d_pct" in factors:
+        parts.append(f"달러 20일 {factors['dollar_20d_pct']['value']:+.1f}%")
+    if "oil_20d_pct" in factors:
+        parts.append(f"유가 20일 {factors['oil_20d_pct']['value']:+.1f}%")
+    if "yield10y_20d_chg" in factors:
+        parts.append(f"10년물 금리 20일 {factors['yield10y_20d_chg']['value']:+.2f}%p")
+    explanation = f"{', '.join(parts)} 등을 종합하면 현재 시장 환경은 {label}에 가깝습니다. (종합 점수 {score:+.1f})"
 
     return RegimeResult(label, round(score, 2), factors, explanation)
 

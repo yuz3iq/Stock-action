@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+  <a class="back-link" href="/">&larr; 개별 종목 보기</a>
+
+  <h1 style="margin-top:14px;">내 매매 vs 시스템 권장</h1>
+  <div class="hint" style="margin-top:0;">
+    실제로 샀거나 판 기록을 넣으면, 그 날짜 시점으로 돌아가 시스템이 그때 뭐라고 했을지
+    계산해서 실제 행동과 비교합니다 (그 날짜까지의 데이터만 사용 — 미래를 보고 채점하지 않음).
+  </div>
+
+  <form action="/trades/add" method="post" style="margin-top:16px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:110px;">
+        <div class="hint" style="margin-top:0;">티커</div>
+        <input type="text" name="ticker" placeholder="NVDA" required style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:150px;">
+        <div class="hint" style="margin-top:0;">날짜</div>
+        <input type="date" name="date" required style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:90px;">
+        <div class="hint" style="margin-top:0;">매수/매도</div>
+        <select name="side" style="width:100%; padding:14px 16px; border-radius:10px; border:1px solid var(--panel-border); background:var(--panel); color:var(--text); font-size:15px;">
+          <option value="BUY">BUY</option>
+          <option value="SELL">SELL</option>
+        </select>
+      </div>
+      <div style="flex:1; min-width:110px;">
+        <div class="hint" style="margin-top:0;">체결 가격 ($)</div>
+        <input type="number" step="0.01" name="price" placeholder="182.40" required style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:110px;">
+        <div class="hint" style="margin-top:0;">수량 (선택)</div>
+        <input type="number" step="0.0001" name="quantity" placeholder="10" style="width:100%;">
+      </div>
+    </div>
+    <button type="submit" style="margin-top:10px;">기록 추가</button>
+  </form>
+
+  {% if errors %}
+    <div class="error">
+      {% for e in errors %}{{ e }}<br>{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if trades %}
+    <table style="width:100%; border-collapse: collapse; margin-top:22px; font-size:13.5px;">
+      <thead>
+        <tr style="text-align:left; color:var(--text-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em;">
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">날짜</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">종목</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">행동</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">체결가</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">현재가</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">그 이후</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">그날 시스템 판단</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">일치 여부</th>
+          <th style="padding:10px 8px; border-bottom:1px solid var(--panel-border);"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in trades %}
+        {% set t = e.trade %}
+        <tr>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">{{ t.date }}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); font-weight:700;">{{ t.ticker }}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">{{ t.side }}{% if t.quantity %} ({{ t.quantity }}주){% endif %}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">${{ "%.2f"|format(t.price) }}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right;">${{ "%.2f"|format(e.current_price) }}</td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border); text-align:right; color:{{ 'var(--green)' if e.pct_since >= 0 else 'var(--red)' }}; font-weight:700;">
+            {{ "%+.1f"|format(e.pct_since) }}%
+          </td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">
+            <span class="badge {{ e.action.verdict|badge_class }}" style="margin:0;">{{ e.action.verdict }}</span>
+          </td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">
+            {% if e.aligned %}
+              <span style="color:var(--green); font-weight:700;">일치</span>
+            {% else %}
+              <span style="color:var(--red); font-weight:700;">다르게 행동함</span>
+            {% endif %}
+          </td>
+          <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">
+            <form action="/trades/delete/{{ t.id }}" method="post" style="margin:0;">
+              <button type="submit" style="background:transparent; color:var(--text-dim); border:1px solid var(--panel-border); padding:4px 10px; font-size:12px;">삭제</button>
+            </form>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="9" style="padding:2px 8px 14px; border-bottom:1px solid var(--panel-border); color:var(--text-dim); font-size:12.5px; line-height:1.6;">
+            그날 판단 근거 — 추세: {{ e.trend.explanation }} · 추격위험: {{ e.chase.explanation }} · 시장환경: {{ e.regime.explanation }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="hint">아직 입력한 매매 기록이 없어요.</div>
+  {% endif %}
+
+  <div class="scope-note">
+    "일치"는 BUY는 그날 시스템 판단이 ACCUMULATE였을 때, SELL은 AVOID/WAIT 계열이었을 때로
+    판정합니다. 그날 데이터만 보고 계산하기 때문에(사후 정보 없음), 지금 이 페이지에서 실시간으로
+    보는 신호와는 계산 시점이 다를 수 있습니다. 매매 기록은 이 서버의 로컬 파일에만 저장되고
+    GitHub 저장소에는 올라가지 않습니다.
+  </div>
+{% endblock %}

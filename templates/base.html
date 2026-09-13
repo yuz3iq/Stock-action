@@ -78,6 +78,41 @@
     .back-link { color: var(--text-dim); text-decoration: none; font-size: 14px; }
     .back-link:hover { color: var(--text); }
 
+    .alert-banner {
+      background: rgba(91, 141, 239, 0.12);
+      border: 1px solid rgba(91, 141, 239, 0.4);
+      color: var(--text);
+      padding: 14px 16px;
+      border-radius: 10px;
+      margin-top: 18px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .alert-banner a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .alert-banner a:hover { text-decoration: underline; }
+
+    .change-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .change-card.changed { border-color: rgba(242, 177, 52, 0.5); background: rgba(242, 177, 52, 0.06); }
+    .change-card .row1 { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .change-card .ticker { font-weight: 700; font-size: 16px; }
+    .change-flow { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+    .change-flow .arrow { color: var(--text-dim); }
+    .history-strip { display: flex; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
+    .history-dot {
+      font-size: 10.5px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
     .action-banner {
       margin-top: 24px;
       padding: 20px 22px;
