@@ -57,3 +57,30 @@ def fetch_macro_bundle(period: str = "1y", as_of: "dt.date | None" = None) -> di
             # 매크로 지표 하나가 실패해도 전체가 죽지 않도록 None 처리
             bundle[key] = None
     return bundle
+
+
+def fetch_price_history_span(ticker: str, start: dt.date, end: dt.date, interval: str = "1d") -> pd.DataFrame:
+    """
+    [start, end] 구간 전체를 신호 계산에 필요한 lookback(500일)까지 포함해서 "한 번만" 가져온다.
+
+    백테스트처럼 구간 내 여러 날짜마다 그 시점 기준 신호를 계산해야 할 때, fetch_price_history의
+    as_of 파라미터를 날짜 수만큼 반복 호출하면 네트워크 호출이 N번 발생해서 느리다. 대신 이 함수로
+    한 번에 넉넉히 받아온 뒤, 호출하는 쪽에서 df.loc[:특정날짜]로 슬라이스해서 재사용한다.
+    """
+    buffer_start = start - dt.timedelta(days=500)
+    fetch_end = end + dt.timedelta(days=1)
+    df = yf.Ticker(ticker).history(start=buffer_start, end=fetch_end, interval=interval, auto_adjust=True)
+    if df is None or df.empty:
+        raise ValueError(f"'{ticker}' 데이터를 가져오지 못했습니다. 티커나 기간을 확인해주세요.")
+    return df.dropna(subset=["Close"])
+
+
+def fetch_macro_bundle_span(start: dt.date, end: dt.date) -> dict[str, pd.DataFrame]:
+    """fetch_price_history_span의 매크로 버전. 백테스트에서 구간 전체를 한 번에 받아 슬라이스용으로 쓴다."""
+    bundle = {}
+    for key, tk in MACRO_TICKERS.items():
+        try:
+            bundle[key] = fetch_price_history_span(tk, start, end)
+        except Exception:
+            bundle[key] = None
+    return bundle

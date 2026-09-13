@@ -361,6 +361,8 @@ class PortfolioPlan:
     ceiling_pct: float
     risk_profile: str
     regime: RegimeResult
+    concentration_warning: "str | None" = None
+    max_single_weight: float = 0.0
 
 
 def build_portfolio_plan(holdings_raw: list[tuple[str, float, TrendResult, ChaseRiskResult, ActionResult]],
@@ -383,5 +385,197 @@ def build_portfolio_plan(holdings_raw: list[tuple[str, float, TrendResult, Chase
     equity_pct = round(sum(r.weight for r in rows), 1)
     cash_pct = round(100 - equity_pct, 1)
 
+    # --- 포트폴리오 집중도 경고 (규칙 기반, 단순) ---
+    concentration_warning = None
+    nonzero = [r for r in rows if r.weight > 0]
+    max_single = max((r.weight for r in rows), default=0.0)
+    if equity_pct > 0 and nonzero:
+        top = max(nonzero, key=lambda r: r.weight)
+        share_of_equity = max_single / equity_pct * 100
+        if len(nonzero) == 1 and equity_pct >= 8:
+            concentration_warning = f"현재 비중이 있는 종목이 {top.ticker} 하나뿐입니다. 분산이 거의 안 된 상태예요."
+        elif share_of_equity >= 60 and max_single >= 12:
+            concentration_warning = (f"{top.ticker} 한 종목이 전체 주식 비중의 {share_of_equity:.0f}%를 차지합니다. "
+                                      "특정 종목에 지나치게 몰려있지 않은지 점검해보세요.")
+
     return PortfolioPlan(rows=rows, equity_pct=equity_pct, cash_pct=cash_pct, ceiling_pct=ceiling,
-                          risk_profile=risk_profile, regime=regime)
+                          risk_profile=risk_profile, regime=regime,
+                          concentration_warning=concentration_warning, max_single_weight=max_single)
+
+
+# ---------------------------------------------------------------------------
+# 6. RECOVERY SCORE — 하락 후 회복 조짐이 있는가 (CHASE RISK와 대칭적인 로직)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RecoveryResult:
+    label: str   # N/A(하락추세 아님) / NONE / EARLY / CONFIRMED
+    detail: dict
+    explanation: str
+
+
+def compute_recovery_score(df: pd.DataFrame, trend: TrendResult) -> RecoveryResult:
+    """
+    추세가 BEARISH/STRONG BEARISH일 때만 의미가 있는 신호. "이미 하락한 종목이 바닥을 다지고
+    돌아서는 초기 신호가 보이는가"를 20일선 회복 여부 + 저점 대비 반등폭 + 최근 5일 모멘�텀으로 판단한다.
+    CHASE RISK가 "너무 많이 올랐는가"를 보는 것과 대칭되는, "충분히 돌아섰는가"를 보는 신호.
+    """
+    if trend.label not in ("BEARISH", "STRONG BEARISH"):
+        return RecoveryResult("N/A", {}, "추세가 하락 국면이 아니라서 회복 신호를 따질 대상이 아닙니다.")
+
+    close = df["Close"]
+    if len(close) < 30:
+        return RecoveryResult("NONE", {}, "데이터가 충분하지 않아 판정을 보수적으로 처리했습니다.")
+
+    last = float(close.iloc[-1])
+    low20 = float(close.rolling(20).min().iloc[-1])
+    off_low_pct = (last - low20) / low20 * 100 if low20 > 0 else 0.0
+
+    ma20 = close.rolling(20).mean()
+    ma20_now = float(ma20.iloc[-1])
+    ma20_prev = float(ma20.iloc[-6]) if len(ma20) > 6 else ma20_now
+    ma20_rising = ma20_now > ma20_prev
+    above_ma20 = last > ma20_now
+    ret_5d = float(close.pct_change(5).iloc[-1] * 100) if len(close) > 5 else 0.0
+
+    detail = {
+        "off_low_pct": round(off_low_pct, 1),
+        "ma20_rising": ma20_rising,
+        "above_ma20": above_ma20,
+        "ret_5d": round(ret_5d, 1),
+    }
+
+    if above_ma20 and ma20_rising and ret_5d > 0:
+        label = "CONFIRMED"
+        explanation = (f"20일선을 다시 회복했고 이동평균도 상승 전환({ret_5d:+.1f}% 5일 반등). "
+                        "하락 추세에서 회복 국면으로 넘어가는 신호로 볼 수 있습니다.")
+    elif off_low_pct >= 8 and ret_5d > 0:
+        label = "EARLY"
+        explanation = (f"최근 저점 대비 {off_low_pct:+.1f}% 반등했지만 아직 20일선 아래입니다. "
+                        "추세 전환이 확정된 건 아니고, 초기 반등 신호로만 참고하세요.")
+    else:
+        label = "NONE"
+        explanation = "아직 뚜렷한 반등 신호가 없습니다."
+
+    return RecoveryResult(label, detail, explanation)
+
+
+# ---------------------------------------------------------------------------
+# 7. 상대강도 — 시장(지수) 대비 이 종목이 강한가 약한가 (IF I'M WRONG 판정에 사용)
+# ---------------------------------------------------------------------------
+
+def compute_relative_strength(stock_df: pd.DataFrame, index_df: pd.DataFrame | None, window: int = 20) -> float | None:
+    """지수 대비 초과수익률(%p) = 종목 N일 수익률 - 지수 N일 수익률. 지수 데이터가 없으면 None."""
+    if index_df is None:
+        return None
+    stock_ret = _pct_change_n(stock_df, window)
+    index_ret = _pct_change_n(index_df, window)
+    if stock_ret is None or index_ret is None:
+        return None
+    return round(stock_ret - index_ret, 1)
+
+
+# ---------------------------------------------------------------------------
+# 8. IF I'M WRONG — 진입 근거(가설)가 무너졌는가
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ThesisCheck:
+    status: str   # N/A / OK / CAUTION / INVALIDATED
+    conditions: dict
+    explanation: str
+
+
+def check_thesis(side: str, current_trend: TrendResult, current_regime: RegimeResult,
+                  relative_strength: float | None, rel_weak_threshold: float = -8.0) -> ThesisCheck:
+    """
+    매수(BUY) 포지션 전용. "레짐 전환 AND 이평선 붕괴 AND 상대강도 악화"가 동시에 나타나면
+    처음 진입 근거가 깨진 것으로 본다. 세 조건 중 두 개만 겹쳐도 CAUTION으로 미리 알려준다.
+    """
+    if side.upper() != "BUY":
+        return ThesisCheck("N/A", {}, "매도(공매도) 포지션은 이 점검 대상이 아닙니다.")
+
+    regime_off = current_regime.label == "RISK-OFF"
+    trend_broken = current_trend.label in ("BEARISH", "STRONG BEARISH")
+    rel_weak = (relative_strength is not None) and (relative_strength <= rel_weak_threshold)
+
+    conditions = {
+        "regime_off": regime_off,
+        "trend_broken": trend_broken,
+        "relative_weak": rel_weak,
+        "relative_strength_pct": relative_strength,
+    }
+    met = sum([regime_off, trend_broken, rel_weak])
+
+    if met >= 3:
+        status = "INVALIDATED"
+        explanation = ("시장 환경 전환 · 종목 추세 붕괴 · 지수 대비 상대강도 악화가 동시에 나타났습니다. "
+                        "진입 당시의 근거가 무너진 상태입니다 — 포지션을 재검토할 시점입니다.")
+    elif met == 2:
+        status = "CAUTION"
+        explanation = "세 조건 중 두 가지가 나빠졌습니다. 확정 경고는 아니지만 주의 깊게 지켜볼 시점입니다."
+    else:
+        status = "OK"
+        explanation = "진입 근거를 무너뜨릴 만한 조합은 아직 나타나지 않았습니다."
+
+    return ThesisCheck(status, conditions, explanation)
+
+
+# ---------------------------------------------------------------------------
+# 9. POSITION MANAGEMENT — 부분 익절 / 트레일링 스탑 제안
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PositionAdvice:
+    label: str   # HOLD / CONSIDER_PARTIAL_PROFIT / TRAILING_STOP_HIT
+    unrealized_pct: float
+    trailing_stop_price: "float | None"
+    peak_since_entry: "float | None"
+    explanation: str
+
+
+def compute_position_advice(df: pd.DataFrame, entry_date: str, entry_price: float, chase: ChaseRiskResult,
+                             atr_mult: float = 2.5, profit_trigger_pct: float = 20.0) -> PositionAdvice:
+    """
+    진입일 이후 고점 대비 ATR(14)×atr_mult 만큼 빠지면 트레일링 스탑 이탈로 본다.
+    수익이 profit_trigger_pct 이상이면서 동시에 CHASE RISK가 HIGH면(너무 빨리 너무 많이 오름)
+    부분 익절을 고려하라고 제안한다. 둘 다 아니면 그냥 HOLD.
+    """
+    close = df["Close"]
+    current_price = float(close.iloc[-1])
+    unrealized_pct = (current_price - entry_price) / entry_price * 100 if entry_price else 0.0
+
+    high, low = df["High"], df["Low"]
+    prev_close = close.shift(1)
+    tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    atr14 = float(tr.rolling(14).mean().iloc[-1]) if len(tr) >= 14 else 0.0
+
+    try:
+        entry_ts = pd.Timestamp(entry_date)
+        if entry_ts.tzinfo is None and close.index.tz is not None:
+            entry_ts = entry_ts.tz_localize(close.index.tz)
+        since_entry = close[close.index >= entry_ts]
+    except Exception:
+        since_entry = close
+    peak_since_entry = float(since_entry.max()) if len(since_entry) else current_price
+    trailing_stop_price = (peak_since_entry - atr_mult * atr14) if atr14 > 0 else None
+
+    if trailing_stop_price is not None and current_price <= trailing_stop_price:
+        label = "TRAILING_STOP_HIT"
+        explanation = (f"보유 후 고점(${peak_since_entry:.2f}) 대비 {atr_mult}×ATR 하락선(${trailing_stop_price:.2f})을 "
+                        "이탈했습니다. 추세 반전 가능성 — 손절 또는 비중 축소를 검토하세요.")
+    elif unrealized_pct >= profit_trigger_pct and chase.label == "HIGH":
+        label = "CONSIDER_PARTIAL_PROFIT"
+        explanation = (f"진입 대비 +{unrealized_pct:.1f}% 수익 중이고 추격매수 위험도 HIGH입니다. "
+                        "전량이 아니라 일부(예: 1/3)만 이익 실현하고 나머지는 트레일링으로 대응하는 것도 방법입니다.")
+    else:
+        label = "HOLD"
+        explanation = f"진입 대비 {unrealized_pct:+.1f}%. 특별한 관리 신호는 없습니다."
+
+    return PositionAdvice(
+        label=label,
+        unrealized_pct=round(unrealized_pct, 1),
+        trailing_stop_price=round(trailing_stop_price, 2) if trailing_stop_price is not None else None,
+        peak_since_entry=round(peak_since_entry, 2),
+        explanation=explanation,
+    )

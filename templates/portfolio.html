@@ -3,6 +3,9 @@
   <a class="back-link" href="/">&larr; 개별 종목 보기</a>
 
   <h1 style="margin-top:14px;">Portfolio Plan — 실데이터</h1>
+  <div class="hint" style="margin-top:0;">
+    위험성향 3개를 동시에 비교하려면 <a class="back-link" href="/compare-risk?tickers={{ tickers_raw }}&capital={{ capital }}">보수적 vs 공격적 비교 →</a>
+  </div>
 
   <form class="search" action="/portfolio" method="get" style="flex-direction: column; align-items: stretch; gap: 10px;">
     <div>
@@ -51,6 +54,12 @@
         <div class="badge {{ plan.regime.label|badge_class }}">{{ plan.regime.label }}</div>
       </div>
     </div>
+
+    {% if plan.concentration_warning %}
+      <div class="alert-banner" style="border-color: rgba(242,177,52,0.4); background: rgba(242,177,52,0.10);">
+        ⚠ 포트폴리오 집중도 경고: {{ plan.concentration_warning }}
+      </div>
+    {% endif %}
 
     <table style="width:100%; border-collapse: collapse; margin-top:18px; font-size:14px;">
       <thead>

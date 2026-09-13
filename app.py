@@ -43,6 +43,12 @@ _BADGE_CLASS = {
     "ACCUMULATE": "pos", "WATCH": "neutral",
     "WAIT": "warn", "WAIT FOR PULLBACK": "warn",
     "AVOID": "neg",
+    # RECOVERY SCORE
+    "N/A": "neutral", "NONE": "neutral", "EARLY": "warn", "CONFIRMED": "pos",
+    # IF I'M WRONG (ThesisCheck.status) — "OK"는 위에서 이미 pos로 안 쓰이니 새로 추가
+    "OK": "pos", "CAUTION": "warn", "INVALIDATED": "neg",
+    # POSITION MANAGEMENT (PositionAdvice.label)
+    "HOLD": "neutral", "CONSIDER_PARTIAL_PROFIT": "warn", "TRAILING_STOP_HIT": "neg",
 }
 
 
@@ -87,6 +93,7 @@ def analyze():
     chase = signals.compute_chase_risk(price_df)
     regime = signals.compute_market_regime(macro)
     action = signals.decide_action(trend, chase, regime)
+    recovery = signals.compute_recovery_score(price_df, trend)
 
     last_price = float(price_df["Close"].iloc[-1])
 
@@ -98,6 +105,7 @@ def analyze():
         chase=chase,
         regime=regime,
         action=action,
+        recovery=recovery,
     )
 
 
@@ -315,6 +323,159 @@ def changes():
     rows.sort(key=lambda r: (not r["changed"], r["ticker"]))
 
     return render_template("changes.html", rows=rows, errors=result["errors"], today=result["date"])
+
+
+@app.route("/positions", methods=["GET"])
+def positions():
+    """
+    "포지션 입력"은 별도 화면 없이 /trades의 매매 기록에서 자동으로 계산한다(store.get_open_positions).
+    각 보유 종목에 대해 오늘 기준 신호를 새로 계산하고, IF I'M WRONG(가설 무효화)과
+    POSITION MANAGEMENT(부분 익절/트레일링) 판단까지 한 화면에서 보여준다.
+    """
+    open_positions = store.get_open_positions()
+
+    try:
+        macro = get_macro_bundle()
+        index_df = macro.get("index")
+    except Exception as e:
+        return render_template("positions.html", rows=[], errors=[f"매크로 데이터 조회 실패: {e}"])
+
+    regime = signals.compute_market_regime(macro)
+
+    rows = []
+    errors = []
+    for pos in open_positions:
+        try:
+            df = data.fetch_price_history(pos["ticker"])
+            trend = signals.compute_trend_score(df)
+            chase = signals.compute_chase_risk(df)
+            rel_strength = signals.compute_relative_strength(df, index_df)
+            thesis = signals.check_thesis("BUY", trend, regime, rel_strength)
+            advice = signals.compute_position_advice(df, pos["entry_date"], pos["avg_price"], chase)
+            current_price = float(df["Close"].iloc[-1])
+            rows.append({
+                "position": pos, "trend": trend, "chase": chase, "regime": regime,
+                "thesis": thesis, "advice": advice, "current_price": current_price,
+            })
+        except Exception as e:
+            errors.append(f"{pos['ticker']}: {e}")
+
+    return render_template("positions.html", rows=rows, errors=errors)
+
+
+@app.route("/compare-risk", methods=["GET"])
+def compare_risk():
+    """관심종목 그대로, 위험성향 3개(Conservative/Moderate/Aggressive)를 동시에 계산해서 나란히 비교."""
+    saved = store.get_portfolio_settings()
+    tickers_raw = request.args.get("tickers", saved["tickers"])
+    tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()]
+    capital = _parse_capital(request.args.get("capital", str(saved["capital"])))
+
+    try:
+        macro = get_macro_bundle()
+    except Exception as e:
+        return render_template("compare_risk.html", error=f"매크로 데이터 조회 실패: {e}", tickers_raw=tickers_raw, capital=capital)
+    regime = signals.compute_market_regime(macro)
+
+    holdings_raw = []
+    errors = []
+    for tk in tickers:
+        try:
+            df = data.fetch_price_history(tk)
+        except Exception as e:
+            errors.append(f"{tk}: {e}")
+            continue
+        trend = signals.compute_trend_score(df)
+        chase = signals.compute_chase_risk(df)
+        action = signals.decide_action(trend, chase, regime)
+        price = float(df["Close"].iloc[-1])
+        holdings_raw.append((tk, price, trend, chase, action))
+
+    plans = {rp: signals.build_portfolio_plan(holdings_raw, regime, rp) for rp in signals.RISK_PROFILES}
+
+    return render_template("compare_risk.html", plans=plans, capital=capital, tickers_raw=tickers_raw, errors=errors)
+
+
+@app.route("/backtest", methods=["GET"])
+def backtest():
+    """
+    지정한 종목 + 기간에 대해, 그 구간 동안 매주(5거래일)마다 시스템이 뭐라고 했을지 소급 계산해서
+    타임라인으로 보여주고 "시스템 판단을 따랐다면"과 "그냥 사서 들고 있었다면"의 단순 수익률을 비교한다.
+    구간 내 모든 날짜를 매번 새로 fetch하면 느리므로, data.fetch_price_history_span으로 구간 전체를
+    한 번만 받아온 뒤 날짜별로 슬라이스해서 재사용한다.
+    """
+    ticker = request.args.get("ticker", "").strip().upper()
+    start_str = request.args.get("start", "")
+    end_str = request.args.get("end", "")
+
+    if not (ticker and start_str and end_str):
+        return render_template("backtest.html")
+
+    try:
+        start = dt.datetime.strptime(start_str, "%Y-%m-%d").date()
+        end = dt.datetime.strptime(end_str, "%Y-%m-%d").date()
+    except ValueError:
+        return render_template("backtest.html", error="날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).",
+                                ticker=ticker, start=start_str, end=end_str)
+    if start >= end:
+        return render_template("backtest.html", error="시작일은 종료일보다 빨라야 합니다.",
+                                ticker=ticker, start=start_str, end=end_str)
+
+    try:
+        full_df = data.fetch_price_history_span(ticker, start, end)
+        macro_bundle = data.fetch_macro_bundle_span(start, end)
+    except Exception as e:
+        return render_template("backtest.html", error=str(e), ticker=ticker, start=start_str, end=end_str)
+
+    trading_days = [d for d in full_df.index if start <= d.date() <= end]
+    if not trading_days:
+        return render_template("backtest.html", error="해당 기간에 거래일 데이터가 없습니다.",
+                                ticker=ticker, start=start_str, end=end_str)
+
+    # 매일 계산하면 무겁고 표도 길어지므로 5거래일(약 1주) 간격으로 샘플링. 마지막 날은 항상 포함.
+    sample_dates = trading_days[::5]
+    if sample_dates[-1] != trading_days[-1]:
+        sample_dates.append(trading_days[-1])
+
+    timeline = []
+    for d in sample_dates:
+        sliced = full_df.loc[:d]
+        if len(sliced) < 60:
+            continue
+        sliced_macro = {k: (v.loc[:d] if v is not None else None) for k, v in macro_bundle.items()}
+        trend = signals.compute_trend_score(sliced)
+        chase = signals.compute_chase_risk(sliced)
+        regime = signals.compute_market_regime(sliced_macro)
+        action = signals.decide_action(trend, chase, regime)
+        timeline.append({"date": d.date().isoformat(), "price": float(sliced["Close"].iloc[-1]), "verdict": action.verdict})
+
+    if not timeline:
+        return render_template("backtest.html", error="신호를 계산하기엔 데이터가 부족한 기간입니다 (200일선 등에 필요한 과거 데이터 포함, 더 이후 시점으로 시도해보세요).",
+                                ticker=ticker, start=start_str, end=end_str)
+
+    # "시스템을 따랐다면" — ACCUMULATE 구간에서만 보유, 그 외에는 현금(단순화한 가정).
+    system_return = 0.0
+    holding = False
+    entry_price = None
+    for row in timeline:
+        if row["verdict"] == "ACCUMULATE" and not holding:
+            holding, entry_price = True, row["price"]
+        elif row["verdict"] != "ACCUMULATE" and holding:
+            system_return += (row["price"] - entry_price) / entry_price
+            holding, entry_price = False, None
+    if holding and entry_price:
+        system_return += (timeline[-1]["price"] - entry_price) / entry_price
+
+    buy_hold_pct = (timeline[-1]["price"] - timeline[0]["price"]) / timeline[0]["price"] * 100
+
+    changes = [t for i, t in enumerate(timeline) if i > 0 and t["verdict"] != timeline[i - 1]["verdict"]]
+
+    return render_template(
+        "backtest.html", ticker=ticker, start=start_str, end=end_str,
+        timeline=timeline, changes=changes,
+        system_return_pct=round(system_return * 100, 1),
+        buy_hold_pct=round(buy_hold_pct, 1),
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+  <a class="back-link" href="/portfolio">&larr; Portfolio Plan</a>
+
+  <h1 style="margin-top:14px;">보수적인 나 vs 공격적인 나</h1>
+  <div class="hint" style="margin-top:0;">
+    같은 관심종목·같은 자본금을 위험성향(Conservative/Moderate/Aggressive) 3가지로 동시에 계산해서
+    나란히 비교합니다. 종목별 판단(ACCUMULATE 등)은 위험성향과 무관하게 동일하고, 달라지는 건
+    "그 판단에 얼마를 배분하느냐"뿐입니다.
+  </div>
+
+  <form class="search" action="/compare-risk" method="get" style="flex-direction: column; align-items: stretch; gap: 10px; margin-top:14px;">
+    <div>
+      <div class="hint" style="margin-top:0;">관심종목 (쉼표로 구분)</div>
+      <input type="text" name="tickers" value="{{ tickers_raw or '' }}" style="width:100%;">
+    </div>
+    <div>
+      <div class="hint" style="margin-top:0;">총 자본금 (₩)</div>
+      <input type="text" name="capital" value="{{ capital or 30000000 }}" style="width:100%;">
+    </div>
+    <button type="submit" style="align-self:flex-start;">비교</button>
+  </form>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+  {% if errors %}
+    <div class="error">다음 종목은 데이터를 가져오지 못해 제외했습니다: {{ errors|join(", ") }}</div>
+  {% endif %}
+
+  {% if plans %}
+    <div class="cards" style="grid-template-columns: repeat(3, 1fr); margin-top:20px;">
+      {% for rp in ["Conservative", "Moderate", "Aggressive"] %}
+        {% set plan = plans[rp] %}
+        <div class="card">
+          <div class="label">{{ rp }}</div>
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <span class="badge neutral" style="margin:0;">주식 {{ plan.equity_pct }}%</span>
+            <span class="badge neutral" style="margin:0;">현금 {{ plan.cash_pct }}%</span>
+          </div>
+          {% if plan.concentration_warning %}
+            <div class="hint" style="color:var(--amber); margin-bottom:8px;">⚠ {{ plan.concentration_warning }}</div>
+          {% endif %}
+          {% for row in plan.rows %}
+            {% if row.weight > 0 %}
+              <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; border-bottom:1px solid var(--panel-border);">
+                <span>{{ row.ticker }}</span>
+                <span>{{ row.weight }}% · ₩{{ "{:,.0f}".format(capital * row.weight / 100) }}</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+          {% if plan.equity_pct == 0 %}
+            <div class="hint" style="margin-top:4px;">이 성향에서는 신규 진입 조건을 만족한 종목이 없어요.</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="scope-note">
+    세 카드 모두 같은 시장환경({{ plans["Moderate"].regime.label if plans else "" }})과 같은 종목별 판단을
+    기준으로 계산됩니다. 위험성향별 최대 주식비중 상한만 다르게 적용되어 배분 결과가 달라집니다.
+    개인 참고용이며 투자자문이 아닙니다.
+  </div>
+{% endblock %}

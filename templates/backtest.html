@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+  <a class="back-link" href="/">&larr; 개별 종목 보기</a>
+
+  <h1 style="margin-top:14px;">백테스트 / 케이스 스터디</h1>
+  <div class="hint" style="margin-top:0;">
+    종목과 기간을 넣으면, 그 구간 동안 약 1주(5거래일) 간격으로 그 시점 기준 시스템 판단을
+    소급 계산해서 타임라인으로 보여줍니다. 미래 데이터를 보지 않고 그 날짜까지의 데이터만 씁니다.
+  </div>
+
+  <form class="search" action="/backtest" method="get" style="flex-direction: column; align-items: stretch; gap: 10px; margin-top:14px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:120px;">
+        <div class="hint" style="margin-top:0;">티커</div>
+        <input type="text" name="ticker" value="{{ ticker or '' }}" placeholder="NVDA" style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:150px;">
+        <div class="hint" style="margin-top:0;">시작일</div>
+        <input type="date" name="start" value="{{ start or '' }}" style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:150px;">
+        <div class="hint" style="margin-top:0;">종료일</div>
+        <input type="date" name="end" value="{{ end or '' }}" style="width:100%;">
+      </div>
+    </div>
+    <button type="submit" style="align-self:flex-start;">계산</button>
+  </form>
+  <div class="hint">
+    예시 구간: 2020-02-01~2020-04-30(코로나 폭락), 2022-01-01~2022-10-31(2022년 금리인상 약세장)처럼
+    직접 원하는 구간을 넣어보세요.
+  </div>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+
+  {% if timeline %}
+    <div class="cards" style="grid-template-columns: repeat(2, 1fr); margin-top:20px;">
+      <div class="card">
+        <div class="label">시스템 판단을 따랐다면</div>
+        <div class="badge {{ 'pos' if system_return_pct >= 0 else 'neg' }}" style="font-size:20px; padding:6px 12px;">{{ "%+.1f"|format(system_return_pct) }}%</div>
+        <div class="detail">ACCUMULATE 구간에서만 보유, 그 외에는 현금으로 전환했다고 가정(단순화).</div>
+      </div>
+      <div class="card">
+        <div class="label">그냥 사서 들고 있었다면 (Buy & Hold)</div>
+        <div class="badge {{ 'pos' if buy_hold_pct >= 0 else 'neg' }}" style="font-size:20px; padding:6px 12px;">{{ "%+.1f"|format(buy_hold_pct) }}%</div>
+        <div class="detail">{{ start }} 매수 후 {{ end }}까지 그대로 보유.</div>
+      </div>
+    </div>
+
+    {% if changes %}
+      <h2 style="font-size:16px; margin-top:26px; margin-bottom:10px;">판단이 바뀐 시점 ({{ changes|length }}번)</h2>
+      {% for c in changes %}
+        <div class="hint" style="margin:4px 0;">{{ c.date }} → <span class="badge {{ c.verdict|badge_class }}" style="margin:0;">{{ c.verdict }}</span> (가격 ${{ "%.2f"|format(c.price) }})</div>
+      {% endfor %}
+    {% endif %}
+
+    <h2 style="font-size:16px; margin-top:26px; margin-bottom:10px;">전체 타임라인 (약 1주 간격)</h2>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse: collapse; font-size:13px;">
+        <thead>
+          <tr style="text-align:left; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:0.06em;">
+            <th style="padding:8px;">날짜</th>
+            <th style="padding:8px; text-align:right;">가격</th>
+            <th style="padding:8px;">판단</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in timeline %}
+          <tr>
+            <td style="padding:8px; border-bottom:1px solid var(--panel-border);">{{ t.date }}</td>
+            <td style="padding:8px; border-bottom:1px solid var(--panel-border); text-align:right;">${{ "%.2f"|format(t.price) }}</td>
+            <td style="padding:8px; border-bottom:1px solid var(--panel-border);"><span class="badge {{ t.verdict|badge_class }}" style="margin:0;">{{ t.verdict }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  <div class="scope-note">
+    "시스템을 따랐다면" 수익률은 5거래일 간격 샘플로만 매매 시점을 잡는 단순화된 계산이라(장중 변동,
+    슬리피지, 세금·수수료 미반영) 실제로 그렇게 거래했을 때의 수익률과는 다를 수 있습니다. 신호의
+    방향성과 전환 시점을 살펴보기 위한 케이스 스터디용이며, 투자 성과를 보장하지 않습니다.
+  </div>
+{% endblock %}

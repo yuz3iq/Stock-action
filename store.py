@@ -121,6 +121,51 @@ def record_snapshot(ticker: str, date: str, verdict: str, trend: str, chase: str
     return True
 
 
+def get_open_positions() -> list[dict]:
+    """
+    "포지션 입력" — 대신 매매 기록(/trades)에서 자동으로 계산한다. 별도 입력 화면을 새로
+    만들지 않고, BUY/SELL 기록을 시간순으로 FIFO(선입선출)로 소진시켜서 지금 남아있는
+    보유 수량과 평단가를 구한다. 수량을 입력하지 않은 매매 기록(가격 비교용으로만 넣은 경우)은
+    포지션 계산에서 제외한다.
+    """
+    trades = sorted(get_trades(), key=lambda t: t["date"])
+    lots: dict[str, list[list]] = {}  # ticker -> [[date, price, qty], ...]
+
+    for t in trades:
+        qty = t.get("quantity") or 0
+        if qty <= 0:
+            continue
+        ticker = t["ticker"]
+        lots.setdefault(ticker, [])
+        if t.get("side", "BUY").upper() == "BUY":
+            lots[ticker].append([t["date"], t["price"], qty])
+        else:
+            remaining = qty
+            while remaining > 1e-9 and lots[ticker]:
+                lot = lots[ticker][0]
+                take = min(lot[2], remaining)
+                lot[2] -= take
+                remaining -= take
+                if lot[2] <= 1e-9:
+                    lots[ticker].pop(0)
+
+    positions = []
+    for ticker, lot_list in lots.items():
+        lot_list = [l for l in lot_list if l[2] > 1e-9]
+        if not lot_list:
+            continue
+        total_qty = sum(l[2] for l in lot_list)
+        avg_price = sum(l[1] * l[2] for l in lot_list) / total_qty
+        entry_date = min(l[0] for l in lot_list)
+        positions.append({
+            "ticker": ticker,
+            "quantity": round(total_qty, 4),
+            "avg_price": round(avg_price, 4),
+            "entry_date": entry_date,
+        })
+    return positions
+
+
 def get_changes_today(today: str) -> list[dict]:
     """오늘 날짜로 기록된 스냅샷 중, 바로 전 스냅샷과 판단(verdict)이 달라진 종목만 골라낸다.
     (네트워크 호출 없이 이미 저장된 스냅샷만 보는 가벼운 조회 — 홈 화면 배너용)"""

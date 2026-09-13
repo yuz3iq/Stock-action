@@ -30,9 +30,19 @@
     </div>
   </div>
 
+  {% if recovery and recovery.label != "N/A" %}
+    <div class="card" style="margin-top:12px;">
+      <div class="label">Recovery Score <span style="text-transform:none; opacity:0.7;">(하락 후 회복 신호)</span></div>
+      <div class="badge {{ recovery.label|badge_class }}">{{ recovery.label }}</div>
+      <div class="detail">{{ recovery.explanation }}</div>
+    </div>
+  {% endif %}
+
   <div class="scope-note">
     ACCUMULATE는 세 신호의 방향이 일치할 때, WAIT/WAIT FOR PULLBACK은 신호가 서로 충돌할 때,
-    AVOID는 종목과 시장이 모두 부정적으로 정렬될 때 나옵니다. 자본 배분 비중(%)이나 목표가는
-    계산하지 않는 MVP 단계이며, 투자 조언이 아닌 참고용 신호입니다.
+    AVOID는 종목과 시장이 모두 부정적으로 정렬될 때 나옵니다. Recovery Score는 추세가 하락일 때만
+    표시되며, ACTION 판정 자체에는 반영되지 않는 참고용 보조 신호입니다. 자본 배분은
+    <a class="back-link" href="/portfolio">Portfolio Plan</a>에서, 실제 보유 포지션 관리는
+    <a class="back-link" href="/positions">내 포지션</a>에서 확인하세요. 투자 조언이 아닌 참고용 신호입니다.
   </div>
 {% endblock %}

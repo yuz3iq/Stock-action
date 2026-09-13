@@ -9,6 +9,8 @@ Flask test client로 /, /analyze 를 호출해 HTML이 정상 렌더링되는지
 import sys
 import types
 
+import pandas as pd
+
 # data.py는 최상단에서 `import yfinance as yf`를 하는데, 이 개발 환경은 외부 PyPI
 # 접속이 막혀 있어 yfinance를 설치할 수 없다. 드라이런 전용으로 더미 모듈을 끼워 넣어
 # import 자체는 통과시키고, 실제 데이터 조회 함수는 아래에서 monkeypatch 한다.
@@ -46,8 +48,34 @@ def fake_macro_bundle(period="1y", as_of=None):
     }
 
 
+def fake_price_history_span(ticker, start, end, interval="1d"):
+    # 실제 fetch_price_history_span처럼 [start-500일, end] 구간 전체를 한 번에 만든다.
+    n_days = (end - start).days + 500 + 30
+    scenarios = {
+        "GOOD": uptrend_series(n_days, daily_drift=0.0015, seed=1),
+        "CHASE": spike_series(n_days, seed=4),
+        "BAD": downtrend_series(n_days, seed=2),
+    }
+    closes = scenarios.get(ticker, uptrend_series(n_days, seed=1))
+    return make_ohlcv(closes, end_date=pd.Timestamp(end))
+
+
+def fake_macro_bundle_span(start, end):
+    n_days = (end - start).days + 500 + 30
+    end_ts = pd.Timestamp(end)
+    return {
+        "vix": make_ohlcv(np.full(n_days, 13.0) + np.random.default_rng(5).normal(0, 0.3, n_days), end_date=end_ts),
+        "index": make_ohlcv(smooth_trend(n_days, daily_drift=0.003, seed=10), end_date=end_ts),
+        "dollar": make_ohlcv(smooth_trend(n_days, daily_drift=0.0, noise=0.001, seed=6), end_date=end_ts),
+        "oil": make_ohlcv(smooth_trend(n_days, daily_drift=0.0, noise=0.003, seed=7), end_date=end_ts),
+        "yield10y": make_ohlcv(np.full(n_days, 4.0) + np.random.default_rng(8).normal(0, 0.01, n_days), end_date=end_ts),
+    }
+
+
 data.fetch_price_history = fake_price_history
 data.fetch_macro_bundle = fake_macro_bundle
+data.fetch_price_history_span = fake_price_history_span
+data.fetch_macro_bundle_span = fake_macro_bundle_span
 
 import os as _os
 import store
@@ -156,6 +184,53 @@ html_changes = r_changes.data.decode("utf-8")
 for needle in ["GOOD", "CHASE", "BAD", "바뀜"]:
     assert needle in html_changes, f"'{needle}' missing from /changes response"
 print("   changes page OK")
+
+print("\n--- /analyze Recovery Score 카드 ---")
+RECOVERY_CARD_MARK = 'label">Recovery Score'  # scope-note 설명 문구와 구분하기 위해 카드 마크업만 매칭
+r_bad_analyze = client.get("/analyze?ticker=BAD")
+html_bad = r_bad_analyze.data.decode("utf-8")
+assert RECOVERY_CARD_MARK in html_bad, "하락 추세 종목에는 Recovery Score 카드가 떠야 함"
+r_good_analyze = client.get("/analyze?ticker=GOOD")
+html_good = r_good_analyze.data.decode("utf-8")
+assert RECOVERY_CARD_MARK not in html_good, "상승 추세 종목엔 Recovery Score 카드가 뜨면 안 됨 (N/A라 숨김)"
+print("   recovery score 조건부 표시 OK")
+
+print("\n--- /positions (내 포지션: IF I'M WRONG + POSITION MANAGEMENT) ---")
+store.add_trade("CHASE", "2024-01-15", 100.0, 5, "BUY")
+r_positions = client.get("/positions")
+print("GET /positions ->", r_positions.status_code)
+assert r_positions.status_code == 200
+html_positions = r_positions.data.decode("utf-8")
+for needle in ["CHASE", "IF I'M WRONG", "평단"]:
+    assert needle in html_positions, f"'{needle}' missing from /positions response"
+assert any(s in html_positions for s in ["HOLD", "CONSIDER_PARTIAL_PROFIT", "TRAILING_STOP_HIT"])
+print("   positions page OK")
+# 정리
+for t in store.get_trades():
+    store.delete_trade(t["id"])
+assert store.get_open_positions() == []
+
+print("\n--- /compare-risk (보수적 vs 공격적 동시 비교) ---")
+r_cmp = client.get("/compare-risk?tickers=GOOD,CHASE,BAD&capital=30000000")
+print("GET /compare-risk ->", r_cmp.status_code)
+assert r_cmp.status_code == 200
+html_cmp = r_cmp.data.decode("utf-8")
+for needle in ["Conservative", "Moderate", "Aggressive", "GOOD"]:
+    assert needle in html_cmp, f"'{needle}' missing from /compare-risk response"
+print("   compare-risk page OK")
+
+print("\n--- /backtest (케이스 스터디) ---")
+r_bt = client.get("/backtest?ticker=GOOD&start=2024-01-01&end=2024-06-01")
+print("GET /backtest ->", r_bt.status_code)
+assert r_bt.status_code == 200
+html_bt = r_bt.data.decode("utf-8")
+for needle in ["시스템 판단을 따랐다면", "Buy & Hold", "2024-01-01"]:
+    assert needle in html_bt, f"'{needle}' missing from /backtest response"
+print("   backtest page OK")
+
+r_bt_bad_range = client.get("/backtest?ticker=GOOD&start=2024-06-01&end=2024-01-01")
+assert "시작일은 종료일보다" in r_bt_bad_range.data.decode("utf-8")
+print("   backtest 잘못된 날짜 범위 검증 OK")
 
 print("\n드라이런 통과: 라우팅/템플릿 렌더링 정상.")
 
