@@ -1,0 +1,15 @@
+name: Daily verdict snapshot
+
+on:
+  schedule:
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /snapshot endpoint
+        run: |
+          curl -sS -f --retry 3 --retry-delay 20 --max-time 90 \
+            "https://signal-conflict-desk.onrender.com/snapshot?token=${{ secrets.SNAPSHOT_TOKEN }}"
