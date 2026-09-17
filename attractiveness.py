@@ -84,16 +84,25 @@ def _extract_pct_after_label(html, label, window=400):
 
 
 def fetch_dividend_yield(code, timeout=10):
-    """Best-effort scrape of current dividend yield (%) for a stock from Naver Finance.
-    Returns (value_or_None, source_url_or_None)."""
+    """Best-effort scrape of current dividend yield (%) for a stock.
+    Returns (value_or_None, source_url_or_None).
+
+    Naver Finance's old item/main.naver & item/coinfo.naver pages now redirect
+    to a JS-rendered SPA (stock.naver.com) whose data loads via client-side
+    fetch, so a plain requests.get() no longer sees the numbers there. The
+    company-fundamentals iframe those pages used to embed -- a FnGuide/
+    WiseReport snapshot page -- is still server-rendered, so that's tried
+    first; the old Naver URLs are kept as a fallback in case Naver's routing
+    changes again."""
     urls = [
+        f"https://navercomp.wisereport.co.kr/v3/company/c1010001.aspx?cmp_cd={code}&theme=light&cn=",
         f"https://finance.naver.com/item/coinfo.naver?code={code}",
         f"https://finance.naver.com/item/main.naver?code={code}",
     ]
     for url in urls:
         try:
             r = requests.get(url, headers=HEADERS, timeout=timeout)
-            r.encoding = "euc-kr"
+            r.encoding = r.apparent_encoding or "euc-kr"
             html = r.text
             for label in ("배당수익률", "시가배당율"):
                 val = _extract_pct_after_label(html, label)
