@@ -22,6 +22,8 @@ from __future__ import annotations
 import datetime as dt
 import os
 
+import pandas as pd
+
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 import data
@@ -73,11 +75,35 @@ def index():
     return render_template("index.html", today_changes=today_changes)
 
 
+def price_chart(close):
+    recent = close.tail(60)
+    average = close.rolling(20).mean().reindex(recent.index)
+    values = list(recent) + list(average.dropna())
+    low, high = min(values), max(values)
+    if low == high:
+        padding = abs(high) * 0.01 or 1
+        low, high = low - padding, high + padding
+
+    def points(series):
+        return " ".join(
+            f"{index * 600 / max(len(recent) - 1, 1):.1f},{10 + 140 * (high - value) / (high - low):.1f}"
+            for index, value in enumerate(series)
+            if not pd.isna(value)
+        )
+
+    return {
+        "close": points(recent), "average": points(average),
+        "high": high, "low": low,
+        "start": recent.index[0].date(), "end": recent.index[-1].date(),
+        "count": len(recent),
+    }
+
+
 @app.route("/analyze", methods=["GET"])
 def analyze():
     ticker = request.args.get("ticker", "").strip().upper()
     if not ticker:
-        return render_template("index.html", error="티커를 입력해주세요.")
+        return render_template("index.html", error="종목 코드를 입력하세요.")
 
     try:
         price_df = data.fetch_price_history(ticker)
@@ -101,6 +127,9 @@ def analyze():
         "result.html",
         ticker=ticker,
         last_price=last_price,
+        chart=price_chart(price_df["Close"]),
+        price_count=len(price_df),
+        chase_available=len(price_df) >= 80,
         trend=trend,
         chase=chase,
         regime=regime,
@@ -409,7 +438,7 @@ def backtest():
     end_str = request.args.get("end", "")
 
     if not (ticker and start_str and end_str):
-        return render_template("backtest.html")
+        return render_template("backtest.html", ticker=ticker, start=start_str, end=end_str)
 
     try:
         start = dt.datetime.strptime(start_str, "%Y-%m-%d").date()

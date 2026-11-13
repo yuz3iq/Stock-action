@@ -1,48 +1,76 @@
 {% extends "base.html" %}
+{% from "signal_labels.html" import verdict %}
+{% block title %}{{ ticker }} · 시그널 데스크{% endblock %}
 {% block content %}
-  <a class="back-link" href="/">&larr; 다른 티커 보기</a>
-
-  <div class="ticker-row" style="margin-top: 14px;">
-    <h1 style="margin:0;">{{ ticker }}</h1>
-    <div class="price">${{ "%.2f"|format(last_price) }}</div>
-  </div>
-
-  <div class="action-banner {{ action.verdict|badge_class }}">
-    <div class="verdict">{{ action.verdict }}</div>
-    <div class="reason">{{ action.reason }}</div>
-  </div>
-
-  <div class="cards">
-    <div class="card">
-      <div class="label">Trend Score</div>
-      <div class="badge {{ trend.label|badge_class }}">{{ trend.label }}</div>
-      <div class="detail">{{ trend.explanation }}</div>
+  <div class="result-heading">
+    <div>
+      <h1>{{ ticker }}</h1>
+      <span class="empty-state">{{ chart.end }} 기준 · 수정 종가</span>
     </div>
-    <div class="card">
-      <div class="label">Chase Risk</div>
-      <div class="badge {{ chase.label|badge_class }}">{{ chase.label }}</div>
-      <div class="detail">{{ chase.explanation }}</div>
-    </div>
-    <div class="card">
-      <div class="label">Market Regime</div>
-      <div class="badge {{ regime.label|badge_class }}">{{ regime.label }}</div>
-      <div class="detail">{{ regime.explanation }}</div>
-    </div>
+    <strong class="quote">{{ "{:,.2f}".format(last_price) }}</strong>
   </div>
-
-  {% if recovery and recovery.label != "N/A" %}
-    <div class="card" style="margin-top:12px;">
-      <div class="label">Recovery Score <span style="text-transform:none; opacity:0.7;">(하락 후 회복 신호)</span></div>
-      <div class="badge {{ recovery.label|badge_class }}">{{ recovery.label }}</div>
-      <div class="detail">{{ recovery.explanation }}</div>
+  <section class="desk-section">
+    <div class="section-heading">
+      <h2>최근 {{ chart.count }}거래일</h2>
+      <div class="chart-legend"><span>수정 종가</span><span>20일 이동평균</span></div>
     </div>
-  {% endif %}
+    <div class="chart">
+      <div class="chart-scale"><span>{{ "{:,.2f}".format(chart.high) }}</span><span>{{ "{:,.2f}".format(chart.low) }}</span></div>
+      <svg viewBox="-2 0 604 160" preserveAspectRatio="none" role="img" aria-label="{{ ticker }} 수정 종가와 20일 이동평균">
+        <path d="M0 10H600 M0 80H600 M0 150H600" class="chart-grid"/>
+        <polyline points="{{ chart.average }}" class="chart-average"/>
+        <polyline points="{{ chart.close }}" class="chart-close"/>
+      </svg>
+    </div>
+    <div class="chart-dates"><span>{{ chart.start }}</span><span>{{ chart.end }}</span></div>
+  </section>
 
-  <div class="scope-note">
-    ACCUMULATE는 세 신호의 방향이 일치할 때, WAIT/WAIT FOR PULLBACK은 신호가 서로 충돌할 때,
-    AVOID는 종목과 시장이 모두 부정적으로 정렬될 때 나옵니다. Recovery Score는 추세가 하락일 때만
-    표시되며, ACTION 판정 자체에는 반영되지 않는 참고용 보조 신호입니다. 자본 배분은
-    <a class="back-link" href="/portfolio">Portfolio Plan</a>에서, 실제 보유 포지션 관리는
-    <a class="back-link" href="/positions">내 포지션</a>에서 확인하세요. 투자 조언이 아닌 참고용 신호입니다.
-  </div>
+  <section class="desk-section">
+    <div class="section-heading">
+      <h2>판단 근거</h2>
+      <strong class="signal-text {{ action.verdict|badge_class }}" title="{{ action.verdict }}">{{ verdict(action.verdict) }}</strong>
+    </div>
+    <table class="desk-table evidence-table">
+      <thead><tr><th scope="col">신호</th><th scope="col">판정</th><th scope="col">근거</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">종목 추세</th>
+          <td class="signal-text {{ trend.label|badge_class }}">{{ {'STRONG BULLISH': '강한 상승', 'BULLISH': '상승', 'NEUTRAL': '혼조', 'BEARISH': '하락', 'STRONG BEARISH': '강한 하락'}[trend.label] }}</td>
+          <td>
+            {% for key, days, minimum in [('short_20d', 20, 25), ('medium_50d', 50, 60), ('long_200d', 200, 220)] %}
+              <span class="evidence-value">{{ days }}일 {{ {1: '상승', 0: '혼조', -1: '하락'}[trend.detail[key]] if price_count >= minimum else '자료 부족' }}</span>
+            {% endfor %}
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">추격 위험</th>
+          <td class="signal-text {{ chase.label|badge_class if chase_available else 'neutral' }}">{{ {'LOW': '낮음', 'MODERATE': '보통', 'HIGH': '높음'}[chase.label] if chase_available else '자료 부족' }}</td>
+          <td>{% if chase_available %}
+            <span class="evidence-value">20일 수익률 {{ "%+.1f"|format(chase.return_20d_pct) }}%</span>
+            <span class="evidence-value">수익률 Z점수 {{ "%+.1f"|format(chase.z_score) }}</span>
+            <span class="evidence-value">20일선 이격 {{ "%+.1f"|format(chase.atr_extension) }} ATR</span>
+          {% else %}{{ price_count }}거래일 조회 / 최소 80거래일{% endif %}</td>
+        </tr>
+        <tr>
+          <th scope="row">시장 환경</th>
+          <td class="signal-text {{ regime.label|badge_class }}">{{ {'RISK-ON': '위험 선호', 'NEUTRAL': '중립', 'RISK-OFF': '위험 회피'}[regime.label] if regime.factors else '자료 부족' }}</td>
+          <td>
+            {% if regime.factors.vix is defined %}<span class="evidence-value">VIX {{ regime.factors.vix.level }}</span>{% endif %}
+            {% if regime.factors.index_trend is defined %}<span class="evidence-value">SPY {{ {1: '상승', 0: '혼조', -1: '하락'}[regime.factors.index_trend.vote] }}</span>{% endif %}
+            {% if regime.factors.dollar_20d_pct is defined %}<span class="evidence-value">달러 {{ "%+.1f"|format(regime.factors.dollar_20d_pct.value) }}%</span>{% endif %}
+            {% if regime.factors.oil_20d_pct is defined %}<span class="evidence-value">WTI {{ "%+.1f"|format(regime.factors.oil_20d_pct.value) }}%</span>{% endif %}
+            {% if regime.factors.yield10y_20d_chg is defined %}<span class="evidence-value">미국 10년물 {{ "%+.2f"|format(regime.factors.yield10y_20d_chg.value) }}%p</span>{% endif %}
+            {% if regime.factors|length < 5 %}<span class="evidence-value">조회 {{ regime.factors|length }}/5</span>{% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    {% if recovery.detail %}
+      <p class="recovery-note"><strong>회복 신호</strong> {{ recovery.explanation }}</p>
+    {% endif %}
+    <div class="result-actions">
+      <a href="{{ url_for('backtest', ticker=ticker) }}">이 종목 백테스트 ↗</a>
+      <a href="{{ url_for('index') }}">다른 종목 분석</a>
+    </div>
+  </section>
 {% endblock %}

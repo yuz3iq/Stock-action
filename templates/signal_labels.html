@@ -1,0 +1,3 @@
+{% macro verdict(label) -%}
+  {{ {'ACCUMULATE': '상승 정렬', 'WATCH': '관망', 'WAIT': '시장 약세', 'WAIT FOR PULLBACK': '과열 주의', 'AVOID': '하락 정렬'}.get(label, label) }}
+{%- endmacro %}
