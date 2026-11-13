@@ -4,16 +4,16 @@
 
   <h1 style="margin-top:14px;">위험 성향 비교</h1>
 
-  <form class="search" action="/compare-risk" method="get" style="flex-direction: column; align-items: stretch; gap: 10px; margin-top:14px;">
+  <form class="risk-form" action="/compare-risk" method="get">
     <div>
-      <div class="hint" style="margin-top:0;">관심종목 (쉼표로 구분)</div>
-      <input type="text" name="tickers" value="{{ tickers_raw or '' }}" style="width:100%;">
+      <label for="risk-tickers">관심종목 (쉼표로 구분)</label>
+      <input type="text" id="risk-tickers" name="tickers" value="{{ tickers_raw or '' }}">
     </div>
     <div>
-      <div class="hint" style="margin-top:0;">총 자본금 (₩)</div>
-      <input type="text" name="capital" value="{{ capital or 30000000 }}" style="width:100%;">
+      <label for="risk-capital">총 자본금 (₩)</label>
+      <input type="text" id="risk-capital" name="capital" value="{{ capital or 30000000 }}">
     </div>
-    <button type="submit" style="align-self:flex-start;">비교</button>
+    <button type="submit">비교</button>
   </form>
 
   {% if error %}
@@ -24,12 +24,12 @@
   {% endif %}
 
   {% if plans %}
-    <div class="cards" style="grid-template-columns: repeat(3, 1fr); margin-top:20px;">
+    <div class="cards risk-cards">
       {% for rp in ["Conservative", "Moderate", "Aggressive"] %}
         {% set plan = plans[rp] %}
         <div class="card">
           <div class="label">{{ rp }}</div>
-          <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <div class="risk-allocation">
             <span class="badge neutral" style="margin:0;">주식 {{ plan.equity_pct }}%</span>
             <span class="badge neutral" style="margin:0;">현금 {{ plan.cash_pct }}%</span>
           </div>
@@ -38,7 +38,7 @@
           {% endif %}
           {% for row in plan.rows %}
             {% if row.weight > 0 %}
-              <div style="display:flex; justify-content:space-between; font-size:13px; padding:4px 0; border-bottom:1px solid var(--panel-border);">
+              <div class="risk-holding">
                 <span>{{ row.ticker }}</span>
                 <span>{{ row.weight }}% · ₩{{ "{:,.0f}".format(capital * row.weight / 100) }}</span>
               </div>
