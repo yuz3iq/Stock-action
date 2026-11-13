@@ -12,8 +12,7 @@
 
   {% if not rows %}
     <div class="hint" style="margin-top:20px;">
-      아직 기록된 스냅샷이 없어요. 관심종목을 <a class="back-link" href="/portfolio">Portfolio Plan</a>에서
-      등록하면 이 페이지를 열 때마다 오늘자 판단이 자동으로 기록되고, 다음날부터 변화 여부를 비교할 수 있어요.
+      신호 기록 없음 · <a class="back-link" href="{{ url_for('portfolio') }}">관심종목 설정 ↗</a>
     </div>
   {% else %}
     {% for r in rows %}

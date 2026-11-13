@@ -73,7 +73,7 @@
             {% if e.aligned %}
               <span style="color:var(--green); font-weight:700;">일치</span>
             {% else %}
-              <span style="color:var(--red); font-weight:700;">다르게 행동함</span>
+              <span style="color:var(--red); font-weight:700;">불일치</span>
             {% endif %}
           </td>
           <td style="padding:10px 8px; border-bottom:1px solid var(--panel-border);">
@@ -82,16 +82,11 @@
             </form>
           </td>
         </tr>
-        <tr>
-          <td colspan="9" style="padding:2px 8px 14px; border-bottom:1px solid var(--panel-border); color:var(--text-dim); font-size:12.5px; line-height:1.6;">
-            그날 판단 근거 — 추세: {{ e.trend.explanation }} · 추격위험: {{ e.chase.explanation }} · 시장환경: {{ e.regime.explanation }}
-          </td>
-        </tr>
         {% endfor %}
       </tbody>
     </table>
   {% else %}
-    <div class="hint">아직 입력한 매매 기록이 없어요.</div>
+    <div class="hint">매매 기록 없음</div>
   {% endif %}
 
 {% endblock %}

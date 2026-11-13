@@ -75,25 +75,54 @@ def index():
     return render_template("index.html", today_changes=today_changes)
 
 
-def price_chart(close):
-    recent = close.tail(60)
-    average = close.rolling(20).mean().reindex(recent.index)
-    values = list(recent) + list(average.dropna())
+def price_chart(prices):
+    recent = prices.tail(60)
+    averages = {
+        window: prices["Close"].rolling(window).mean().reindex(recent.index)
+        for window in (20, 50)
+    }
+    values = list(recent[["Open", "High", "Low", "Close"]].stack().dropna())
+    for average in averages.values():
+        values.extend(average.dropna())
     low, high = min(values), max(values)
     if low == high:
         padding = abs(high) * 0.01 or 1
         low, high = low - padding, high + padding
 
-    def points(series):
-        return " ".join(
-            f"{index * 600 / max(len(recent) - 1, 1):.1f},{10 + 140 * (high - value) / (high - low):.1f}"
-            for index, value in enumerate(series)
-            if not pd.isna(value)
-        )
+    def y(value):
+        return round(10 + 140 * (high - value) / (high - low), 2)
 
+    step = 600 / len(recent)
+    volume = recent.get("Volume", pd.Series(0, index=recent.index)).fillna(0).clip(lower=0)
+    max_volume = volume.max()
+    candles = []
+    for index, (date, row) in enumerate(recent.iterrows()):
+        close = row["Close"]
+        opening, upper, lower = (
+            row[field] if pd.notna(row[field]) else close
+            for field in ("Open", "High", "Low")
+        )
+        volume_height = 36 * volume.iloc[index] / max_volume if max_volume else 0
+        candles.append({
+            "x": round((index + 0.5) * step, 2),
+            "body": min(y(opening), y(close)),
+            "height": max(abs(y(close) - y(opening)), 0.8),
+            "high": y(upper), "low": y(lower),
+            "rising": close >= opening,
+            "volume": round(volume_height, 2),
+            "label": f"{date.date()} · 시가 {opening:,.2f} · 고가 {upper:,.2f} · 저가 {lower:,.2f} · 종가 {close:,.2f} · 거래량 {volume.iloc[index]:,.0f}",
+        })
     return {
-        "close": points(recent), "average": points(average),
-        "high": high, "low": low,
+        "candles": candles, "width": round(step * 0.65, 2),
+        "averages": {
+            window: " ".join(
+                f"{(index + 0.5) * step:.2f},{y(value)}"
+                for index, value in enumerate(average)
+                if pd.notna(value)
+            )
+            for window, average in averages.items()
+        },
+        "high": high, "low": low, "has_volume": max_volume > 0,
         "start": recent.index[0].date(), "end": recent.index[-1].date(),
         "count": len(recent),
     }
@@ -127,7 +156,7 @@ def analyze():
         "result.html",
         ticker=ticker,
         last_price=last_price,
-        chart=price_chart(price_df["Close"]),
+        chart=price_chart(price_df),
         price_count=len(price_df),
         chase_available=len(price_df) >= 80,
         trend=trend,

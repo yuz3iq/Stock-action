@@ -11,17 +11,39 @@
   </div>
   <section class="desk-section">
     <div class="section-heading">
-      <h2>최근 {{ chart.count }}거래일</h2>
-      <div class="chart-legend"><span>수정 종가</span><span>20일 이동평균</span></div>
+      <h2>일봉 · 최근 {{ chart.count }}거래일</h2>
+      <div class="chart-legend">
+        {% for window, points in chart.averages.items() %}
+          {% if points %}<span class="ma-{{ window }}">{{ window }}일선</span>{% endif %}
+        {% endfor %}
+      </div>
     </div>
     <div class="chart">
       <div class="chart-scale"><span>{{ "{:,.2f}".format(chart.high) }}</span><span>{{ "{:,.2f}".format(chart.low) }}</span></div>
-      <svg viewBox="-2 0 604 160" preserveAspectRatio="none" role="img" aria-label="{{ ticker }} 수정 종가와 20일 이동평균">
+      <svg viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="{{ ticker }} 일봉과 이동평균선">
         <path d="M0 10H600 M0 80H600 M0 150H600" class="chart-grid"/>
-        <polyline points="{{ chart.average }}" class="chart-average"/>
-        <polyline points="{{ chart.close }}" class="chart-close"/>
+        {% for bar in chart.candles %}
+          <g class="candle {{ 'rising' if bar.rising else 'falling' }}">
+            <title>{{ bar.label }}</title>
+            <line x1="{{ bar.x }}" x2="{{ bar.x }}" y1="{{ bar.high }}" y2="{{ bar.low }}"/>
+            <rect x="{{ bar.x - chart.width / 2 }}" y="{{ bar.body }}" width="{{ chart.width }}" height="{{ bar.height }}"/>
+          </g>
+        {% endfor %}
+        {% for window, points in chart.averages.items() %}
+          {% if points %}<polyline points="{{ points }}" class="chart-average ma-{{ window }}"/>{% endif %}
+        {% endfor %}
       </svg>
     </div>
+    {% if chart.has_volume %}
+      <div class="volume-chart">
+        <span>거래량</span>
+        <svg viewBox="0 0 600 40" preserveAspectRatio="none" role="img" aria-label="{{ ticker }} 일별 거래량">
+          {% for bar in chart.candles %}
+            <rect class="candle {{ 'rising' if bar.rising else 'falling' }}" x="{{ bar.x - chart.width / 2 }}" y="{{ 40 - bar.volume }}" width="{{ chart.width }}" height="{{ bar.volume }}"/>
+          {% endfor %}
+        </svg>
+      </div>
+    {% endif %}
     <div class="chart-dates"><span>{{ chart.start }}</span><span>{{ chart.end }}</span></div>
   </section>
 
@@ -66,7 +88,9 @@
       </tbody>
     </table>
     {% if recovery.detail %}
-      <p class="recovery-note"><strong>회복 신호</strong> {{ recovery.explanation }}</p>
+      <p class="recovery-note"><strong>회복 신호</strong> {{ {'CONFIRMED': '회복 확인', 'EARLY': '초기 반등', 'NONE': '미확인'}[recovery.label] }}
+      · 20일 저점 대비 {{ "%+.1f"|format(recovery.detail.off_low_pct) }}%
+      · 5일 수익률 {{ "%+.1f"|format(recovery.detail.ret_5d) }}%</p>
     {% endif %}
     <div class="result-actions">
       <a href="{{ url_for('backtest', ticker=ticker) }}">이 종목 백테스트 ↗</a>

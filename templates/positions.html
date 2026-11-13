@@ -37,7 +37,6 @@
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="badge {{ r.thesis.status|badge_class }}" style="margin:0;">진입 근거 · {{ r.thesis.status }}</span>
           </div>
-          <div class="hint" style="margin-top:6px; margin-bottom:0;">{{ r.thesis.explanation }}</div>
           {% if r.thesis.status != "N/A" %}
             <div class="hint" style="margin-top:4px; margin-bottom:0; font-size:12px;">
               시장환경 RISK-OFF: {{ "예" if r.thesis.conditions.regime_off else "아니오" }} ·
@@ -54,7 +53,6 @@
               <span class="hint" style="margin:0;">트레일링 스탑 기준가: ${{ "%.2f"|format(r.advice.trailing_stop_price) }} (고점 ${{ "%.2f"|format(r.advice.peak_since_entry) }} 대비 2.5×ATR)</span>
             {% endif %}
           </div>
-          <div class="hint" style="margin-top:6px; margin-bottom:0;">{{ r.advice.explanation }}</div>
         </div>
       </div>
     {% endfor %}
