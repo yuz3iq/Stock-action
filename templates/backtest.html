@@ -4,22 +4,22 @@
 
   <h1 style="margin-top:14px;">백테스트</h1>
 
-  <form class="search" action="/backtest" method="get" style="flex-direction: column; align-items: stretch; gap: 10px; margin-top:14px;">
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:120px;">
-        <div class="hint" style="margin-top:0;">티커</div>
-        <input type="text" name="ticker" value="{{ ticker or '' }}" placeholder="NVDA" style="width:100%;">
+  <form class="entry-form" action="/backtest" method="get">
+    <div class="entry-fields">
+      <div>
+        <label for="backtest-ticker">티커</label>
+        <input id="backtest-ticker" type="text" name="ticker" value="{{ ticker or '' }}" placeholder="NVDA">
       </div>
-      <div style="flex:1; min-width:150px;">
-        <div class="hint" style="margin-top:0;">시작일</div>
-        <input type="date" name="start" value="{{ start or '' }}" style="width:100%;">
+      <div>
+        <label for="backtest-start">시작일</label>
+        <input id="backtest-start" type="date" name="start" value="{{ start or '' }}">
       </div>
-      <div style="flex:1; min-width:150px;">
-        <div class="hint" style="margin-top:0;">종료일</div>
-        <input type="date" name="end" value="{{ end or '' }}" style="width:100%;">
+      <div>
+        <label for="backtest-end">종료일</label>
+        <input id="backtest-end" type="date" name="end" value="{{ end or '' }}">
       </div>
     </div>
-    <button type="submit" style="align-self:flex-start;">계산</button>
+    <button type="submit">계산</button>
   </form>
 
   {% if error %}
@@ -28,7 +28,7 @@
 
   {% if timeline %}
     <p class="hint">5거래일 간격 · 수수료·세금·슬리피지 미반영</p>
-    <div class="cards" style="grid-template-columns: repeat(2, 1fr); margin-top:20px;">
+    <div class="cards entry-results entry-results-pair">
       <div class="card">
         <div class="label">신호에 따른 보유</div>
         <div class="badge {{ 'pos' if system_return_pct >= 0 else 'neg' }}" style="font-size:20px; padding:6px 12px;">{{ "%+.1f"|format(system_return_pct) }}%</div>

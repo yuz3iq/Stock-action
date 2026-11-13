@@ -244,20 +244,35 @@ main a:hover { color: var(--text); }
   .evidence-table { font-size: 12px; }
 }
 
-.risk-form {
-  display: grid;
-  gap: 20px;
-  max-width: 680px;
-}
-.risk-form label {
+.entry-form { display: grid; gap: 20px; }
+.risk-form { max-width: 680px; }
+.entry-form label {
   display: block;
   margin-bottom: 8px;
   color: var(--text-dim);
   font-size: 14px;
 }
-.risk-form input { width: 100%; }
-.risk-form button { justify-self: start; }
-.risk-cards { gap: 18px; margin-top: 32px; }
+.entry-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr));
+  gap: 16px;
+}
+.entry-form :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.entry-form button { justify-self: start; }
+.entry-results, .risk-cards { gap: 18px; margin-top: 32px; }
+.entry-results-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entry-table { overflow-x: auto; }
+.entry-table th { white-space: nowrap; }
 .risk-cards .card { min-width: 0; padding: 20px; }
 .risk-cards .label { margin-bottom: 14px; }
 .risk-allocation, .risk-holding {
@@ -273,5 +288,7 @@ main a:hover { color: var(--text); }
   font-size: 13px;
 }
 @media (max-width: 720px) {
-  .risk-cards { grid-template-columns: 1fr; gap: 14px; margin-top: 28px; }
+  .entry-results, .risk-cards { grid-template-columns: 1fr; gap: 14px; margin-top: 28px; }
 }
+
+.change-card + .change-card { margin-top: 16px; }
