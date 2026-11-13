@@ -3,10 +3,6 @@
   <a class="back-link" href="/">&larr; 개별 종목 보기</a>
 
   <h1 style="margin-top:14px;">백테스트</h1>
-  <div class="hint" style="margin-top:0;">
-    종목과 기간을 넣으면, 그 구간 동안 약 1주(5거래일) 간격으로 그 시점 기준 시스템 판단을
-    소급 계산해서 타임라인으로 보여줍니다. 미래 데이터를 보지 않고 그 날짜까지의 데이터만 씁니다.
-  </div>
 
   <form class="search" action="/backtest" method="get" style="flex-direction: column; align-items: stretch; gap: 10px; margin-top:14px;">
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -25,24 +21,21 @@
     </div>
     <button type="submit" style="align-self:flex-start;">계산</button>
   </form>
-  <div class="hint">
-    예시 구간: 2020-02-01~2020-04-30(코로나 폭락), 2022-01-01~2022-10-31(2022년 금리인상 약세장)처럼
-    직접 원하는 구간을 넣어보세요.
-  </div>
 
   {% if error %}
     <div class="error">{{ error }}</div>
   {% endif %}
 
   {% if timeline %}
+    <p class="hint">5거래일 간격 · 수수료·세금·슬리피지 미반영</p>
     <div class="cards" style="grid-template-columns: repeat(2, 1fr); margin-top:20px;">
       <div class="card">
-        <div class="label">시스템 판단을 따랐다면</div>
+        <div class="label">신호에 따른 보유</div>
         <div class="badge {{ 'pos' if system_return_pct >= 0 else 'neg' }}" style="font-size:20px; padding:6px 12px;">{{ "%+.1f"|format(system_return_pct) }}%</div>
         <div class="detail">ACCUMULATE 구간에서만 보유, 그 외에는 현금으로 전환했다고 가정(단순화).</div>
       </div>
       <div class="card">
-        <div class="label">그냥 사서 들고 있었다면 (Buy & Hold)</div>
+        <div class="label">단순 보유</div>
         <div class="badge {{ 'pos' if buy_hold_pct >= 0 else 'neg' }}" style="font-size:20px; padding:6px 12px;">{{ "%+.1f"|format(buy_hold_pct) }}%</div>
         <div class="detail">{{ start }} 매수 후 {{ end }}까지 그대로 보유.</div>
       </div>
@@ -78,9 +71,4 @@
     </div>
   {% endif %}
 
-  <div class="scope-note">
-    "시스템을 따랐다면" 수익률은 5거래일 간격 샘플로만 매매 시점을 잡는 단순화된 계산이라(장중 변동,
-    슬리피지, 세금·수수료 미반영) 실제로 그렇게 거래했을 때의 수익률과는 다를 수 있습니다. 신호의
-    방향성과 전환 시점을 살펴보기 위한 케이스 스터디용이며, 투자 성과를 보장하지 않습니다.
-  </div>
 {% endblock %}

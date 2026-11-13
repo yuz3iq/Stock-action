@@ -3,11 +3,6 @@
   <a class="back-link" href="/">&larr; 개별 종목 보기</a>
 
   <h1 style="margin-top:14px;">보유 종목</h1>
-  <div class="hint" style="margin-top:0;">
-    <a class="back-link" href="/trades">매매 기록(/trades)</a>에 남긴 BUY/SELL을 선입선출로 정산해서
-    지금 남아있는 보유 수량·평단가를 자동으로 계산합니다. 종목별로 오늘 신호를 새로 계산해서
-    "진입 근거가 아직 유효한지"(IF I'M WRONG)와 "지금 관리가 필요한지"(부분 익절/트레일링)를 보여줘요.
-  </div>
 
   {% if errors %}
     <div class="error">
@@ -17,8 +12,7 @@
 
   {% if not rows %}
     <div class="hint" style="margin-top:20px;">
-      아직 계산할 보유 포지션이 없어요. <a class="back-link" href="/trades">매매 기록</a>에 수량을 채워서
-      BUY를 입력하고 아직 그만큼 SELL하지 않았다면 여기 자동으로 나타납니다.
+      보유 종목 없음 · <a class="back-link" href="{{ url_for('trades') }}">매매 기록 추가 ↗</a>
     </div>
   {% else %}
     {% for r in rows %}
@@ -41,7 +35,7 @@
 
         <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--panel-border);">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span class="badge {{ r.thesis.status|badge_class }}" style="margin:0;">IF I'M WRONG · {{ r.thesis.status }}</span>
+            <span class="badge {{ r.thesis.status|badge_class }}" style="margin:0;">진입 근거 · {{ r.thesis.status }}</span>
           </div>
           <div class="hint" style="margin-top:6px; margin-bottom:0;">{{ r.thesis.explanation }}</div>
           {% if r.thesis.status != "N/A" %}
@@ -66,11 +60,4 @@
     {% endfor %}
   {% endif %}
 
-  <div class="scope-note">
-    IF I'M WRONG은 "시장환경 전환 · 종목 추세 붕괴 · 지수 대비 상대강도 악화" 세 조건을 확인해서,
-    다 겹치면 INVALIDATED(진입 근거 무효화), 두 개만 겹치면 CAUTION으로 알려줍니다. 매수(BUY) 포지션에만
-    적용되며, 공매도 포지션은 대상이 아닙니다(N/A). 부분 익절/트레일링 제안은 보유 후 고점 대비
-    2.5×ATR(14) 하락하면 TRAILING_STOP_HIT, +20% 이상 수익 중이면서 추격위험이 HIGH면
-    CONSIDER_PARTIAL_PROFIT으로 표시하는 단순 규칙입니다. 모두 참고용이며 매매를 지시하지 않습니다.
-  </div>
 {% endblock %}

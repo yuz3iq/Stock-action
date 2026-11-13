@@ -3,10 +3,6 @@
   <a class="back-link" href="/">&larr; 개별 종목 보기</a>
 
   <h1 style="margin-top:14px;">매매 기록</h1>
-  <div class="hint" style="margin-top:0;">
-    실제로 샀거나 판 기록을 넣으면, 그 날짜 시점으로 돌아가 시스템이 그때 뭐라고 했을지
-    계산해서 실제 행동과 비교합니다 (그 날짜까지의 데이터만 사용 — 미래를 보고 채점하지 않음).
-  </div>
 
   <form action="/trades/add" method="post" style="margin-top:16px;">
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -98,10 +94,4 @@
     <div class="hint">아직 입력한 매매 기록이 없어요.</div>
   {% endif %}
 
-  <div class="scope-note">
-    "일치"는 BUY는 그날 시스템 판단이 ACCUMULATE였을 때, SELL은 AVOID/WAIT 계열이었을 때로
-    판정합니다. 그날 데이터만 보고 계산하기 때문에(사후 정보 없음), 지금 이 페이지에서 실시간으로
-    보는 신호와는 계산 시점이 다를 수 있습니다. 매매 기록은 이 서버의 로컬 파일에만 저장되고
-    GitHub 저장소에는 올라가지 않습니다.
-  </div>
 {% endblock %}
